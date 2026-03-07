@@ -1,0 +1,60 @@
+server:
+  port: 8081   # 8080 被占用时使用 8081，前端 proxy 已同步
+
+spring:
+  # 数据库配置 (MySQL 8)
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/flash_sale?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowMultiQueries=true
+    username: root          # 改成你本机 MySQL 的用户名
+    password: 1234          # 改成你本机 MySQL 的密码
+
+  # Redis 配置
+  # RabbitMQ（异步下单时启用，需先启动 RabbitMQ；不启用异步可忽略）
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      # 如果 Redis 没有密码，直接删掉这一行或注释掉
+      # password: your_redis_password
+      database: 0
+      lettuce:
+        pool:
+          max-active: 100
+          max-idle: 50
+          min-idle: 10
+
+# 秒杀：是否异步下单（true 时通过 RabbitMQ 落库，需 RabbitMQ 可用）
+seckill:
+  order:
+    async: false
+
+# Actuator / Prometheus
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# 后台鉴权（JWT）
+admin:
+  jwt-secret: flash-sale-admin-secret-change-in-production
+  jwt-expire-minutes: 120
+  login-username: admin
+  login-password: "123456"

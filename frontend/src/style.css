@@ -1,0 +1,82 @@
+/* 彻底清除旧样式，切换到京东经典电商风 */
+:root {
+  --jd-red: #e1251b;
+  --jd-red-hover: #c81623;
+  --bg-color: #f4f4f4;
+  --panel-bg: #ffffff;
+  --text-main: #333333;
+  --text-muted: #999999;
+  --border-color: #eeeeee;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+}
+
+body {
+  margin: 0;
+  font-family: "Microsoft YaHei", -apple-system, Arial, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  min-height: 100vh;
+}
+
+a {
+  color: var(--text-main);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--jd-red);
+}
+
+/* 京东风格卡片 */
+.jd-card {
+  background: var(--panel-bg);
+  border-radius: var(--radius-sm);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  overflow: hidden;
+}
+.jd-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+/* 京东风格按钮 */
+button.jd-btn {
+  background: var(--jd-red);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+button.jd-btn:hover:not(:disabled) {
+  background: var(--jd-red-hover);
+}
+button.jd-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* 输入框 */
+input.jd-input {
+  border: 1px solid #ccc;
+  padding: 6px 12px;
+  border-radius: 4px;
+  outline: none;
+}
+input.jd-input:focus {
+  border-color: var(--jd-red);
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.container {
+  width: 1200px;
+  margin: 0 auto;
+}
