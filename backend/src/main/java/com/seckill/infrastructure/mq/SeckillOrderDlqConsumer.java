@@ -21,12 +21,17 @@ public class SeckillOrderDlqConsumer {
 
     @RabbitListener(queues = RabbitMQConfig.SECKILL_ORDER_DLQ)
     public void onDlqMessage(SeckillOrderMessage msg) {
-        log.error("[SECKILL_ORDER_DLQ] userId={} goodsId={} createTime={} | 订单异步落库失败，执行补偿",
-                msg != null ? msg.getUserId() : null,
-                msg != null ? msg.getGoodsId() : null,
-                msg != null ? msg.getCreateTime() : null);
-        if (msg != null && msg.getUserId() != null && msg.getGoodsId() != null) {
-            seckillService.compensateRedisState(msg.getUserId(), msg.getGoodsId());
+        if (msg == null || msg.getUserId() == null || msg.getGoodsId() == null) {
+            return;
         }
+        // 补偿前必须校验数据库：消息进 DLQ 可能是 ACK 超时，订单或已落库，盲目补偿会导致超卖
+        var order = seckillService.getUserOrderForGoods(msg.getUserId(), msg.getGoodsId());
+        if (order != null) {
+            log.info("[SECKILL_ORDER_DLQ] 订单已落库，无需补偿: userId={} goodsId={}", msg.getUserId(), msg.getGoodsId());
+            return;
+        }
+        log.error("[SECKILL_ORDER_DLQ] userId={} goodsId={} createTime={} | 订单未落库，执行补偿",
+                msg.getUserId(), msg.getGoodsId(), msg.getCreateTime());
+        seckillService.compensateRedisState(msg.getUserId(), msg.getGoodsId());
     }
 }

@@ -37,8 +37,19 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
             String userId = request.getHeader("userId");
             if (userId == null) {
-                // 修复：直接以 request.getRemoteAddr() 为主，X-Forwarded-For 可被伪造
-                userId = request.getRemoteAddr();
+                // Nginx/网关场景：getRemoteAddr 为代理 IP，需取 X-Forwarded-For 首个（真实客户端）
+                // 由网关覆盖该 Header 确保可信；无代理时 fallback 到 getRemoteAddr
+                String forwarded = request.getHeader("X-Forwarded-For");
+                if (forwarded != null && !forwarded.isEmpty()) {
+                    int comma = forwarded.indexOf(',');
+                    userId = comma > 0 ? forwarded.substring(0, comma).trim() : forwarded.trim();
+                }
+                if (userId == null || userId.isEmpty()) {
+                    userId = request.getHeader("X-Real-IP");
+                }
+                if (userId == null || userId.isEmpty()) {
+                    userId = request.getRemoteAddr();
+                }
             }
 
             String uri = request.getRequestURI();

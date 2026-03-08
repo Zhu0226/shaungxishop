@@ -21,6 +21,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -62,6 +63,13 @@ public class SeckillServiceImpl implements SeckillService {
     private static final String METRIC_SUCCESS_KEY = "seckill:metric:success";
     private static final String METRIC_FAIL_KEY = "seckill:metric:fail";
 
+    /** 安全释放锁：仅当 value 一致时删除，避免误删他人锁 */
+    private static final String UNLOCK_LUA =
+            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+
+    private static final int CACHE_LOCK_RETRY_MAX = 200;
+    private static final int CACHE_LOCK_SLEEP_MS = 50;
+
     /** 本地售罄标记，秒杀结束后直接拦截 */
     private final ConcurrentHashMap<Long, Boolean> localOverMap = new ConcurrentHashMap<>();
 
@@ -82,9 +90,13 @@ public class SeckillServiceImpl implements SeckillService {
     @Override
     public List<SeckillGoods> listSeckillGoods() {
         List<SeckillGoods> list = (List<SeckillGoods>) redisTemplate.opsForValue().get(GOODS_LIST_CACHE_KEY);
-        if (list == null) {
-            String lockKey = CACHE_LOCK_PREFIX + "list";
-            Boolean locked = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", 10, TimeUnit.SECONDS);
+        if (list != null) return list;
+
+        String lockKey = CACHE_LOCK_PREFIX + "list";
+        int retries = 0;
+        while (retries < CACHE_LOCK_RETRY_MAX) {
+            String uuid = UUID.randomUUID().toString();
+            Boolean locked = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, uuid, 10, TimeUnit.SECONDS);
             try {
                 if (Boolean.TRUE.equals(locked)) {
                     list = (List<SeckillGoods>) redisTemplate.opsForValue().get(GOODS_LIST_CACHE_KEY);
@@ -96,20 +108,23 @@ public class SeckillServiceImpl implements SeckillService {
                             redisTemplate.opsForValue().set(GOODS_LIST_CACHE_KEY, list, 60, TimeUnit.SECONDS);
                         }
                     }
-                } else {
-                    Thread.sleep(50);
-                    return listSeckillGoods();
+                    return list;
                 }
+                Thread.sleep(CACHE_LOCK_SLEEP_MS);
+                retries++;
+                list = (List<SeckillGoods>) redisTemplate.opsForValue().get(GOODS_LIST_CACHE_KEY);
+                if (list != null) return list;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new BusinessException(ErrorCode.INTERNAL_ERROR, "缓存加载被中断");
             } finally {
                 if (Boolean.TRUE.equals(locked)) {
-                    stringRedisTemplate.delete(lockKey);
+                    stringRedisTemplate.execute(new DefaultRedisScript<>(UNLOCK_LUA, Long.class),
+                            Collections.singletonList(lockKey), uuid);
                 }
             }
         }
-        return list;
+        throw new BusinessException(ErrorCode.INTERNAL_ERROR, "缓存加载超时");
     }
 
     @Override
@@ -123,9 +138,13 @@ public class SeckillServiceImpl implements SeckillService {
     public SeckillGoods getGoodsDetail(Long goodsId) {
         String key = GOODS_DETAIL_CACHE_PREFIX + goodsId;
         SeckillGoods goods = (SeckillGoods) redisTemplate.opsForValue().get(key);
-        if (goods == null) {
-            String lockKey = CACHE_LOCK_PREFIX + "detail:" + goodsId;
-            Boolean locked = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", 10, TimeUnit.SECONDS);
+        if (goods != null) return goods;
+
+        String lockKey = CACHE_LOCK_PREFIX + "detail:" + goodsId;
+        int retries = 0;
+        while (retries < CACHE_LOCK_RETRY_MAX) {
+            String uuid = UUID.randomUUID().toString();
+            Boolean locked = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, uuid, 10, TimeUnit.SECONDS);
             try {
                 if (Boolean.TRUE.equals(locked)) {
                     goods = (SeckillGoods) redisTemplate.opsForValue().get(key);
@@ -135,20 +154,23 @@ public class SeckillServiceImpl implements SeckillService {
                             redisTemplate.opsForValue().set(key, goods, 60, TimeUnit.SECONDS);
                         }
                     }
-                } else {
-                    Thread.sleep(30);
-                    return getGoodsDetail(goodsId);
+                    return goods;
                 }
+                Thread.sleep(CACHE_LOCK_SLEEP_MS / 2);
+                retries++;
+                goods = (SeckillGoods) redisTemplate.opsForValue().get(key);
+                if (goods != null) return goods;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new BusinessException(ErrorCode.INTERNAL_ERROR, "缓存加载被中断");
             } finally {
                 if (Boolean.TRUE.equals(locked)) {
-                    stringRedisTemplate.delete(lockKey);
+                    stringRedisTemplate.execute(new DefaultRedisScript<>(UNLOCK_LUA, Long.class),
+                            Collections.singletonList(lockKey), uuid);
                 }
             }
         }
-        return goods;
+        return goodsMapper.selectById(goodsId);
     }
 
     @Override
@@ -335,6 +357,7 @@ public class SeckillServiceImpl implements SeckillService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean cancelOrder(Long orderId, Long userId) {
         SeckillOrder order = orderMapper.selectById(orderId);
         if (order == null || !order.getUserId().equals(userId) || order.getStatus() != OrderStatus.PENDING.getCode()) {
