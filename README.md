@@ -1,3 +1,24 @@
+## 本地手动提交到 GitHub（备忘）
+
+```bash
+# 1. 进入项目根目录
+cd D:\Develop\project\project\flash-sale-system
+
+# 2. 查看当前修改
+git status
+
+# 3. 添加所有修改（也可以只 add 某些文件）
+git add .
+
+# 4. 提交（把 提交说明 换成本次修改的描述）
+git commit -m "提交说明"
+
+# 5. 推送到远程 main 分支
+git push origin HEAD:main
+```
+
+---
+
 ## 高并发限时秒杀系统（前后端分离版总览）
 
 这是一个包含 **后端 Spring Boot 服务** 和 **前端 Vue 3 + Vite 单页应用** 的秒杀示例项目，方便面试官或学习者一眼看到整体结构：

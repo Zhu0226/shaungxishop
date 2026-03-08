@@ -5,19 +5,8 @@ import lombok.Data;
 @Data
 public class ApiResponse<T> {
 
-    /**
-     * 业务状态码：0 表示成功，非 0 表示失败或异常
-     */
     private int code;
-
-    /**
-     * 提示信息
-     */
     private String msg;
-
-    /**
-     * 业务数据
-     */
     private T data;
 
     public static <T> ApiResponse<T> success(T data) {
@@ -56,4 +45,3 @@ public class ApiResponse<T> {
         return error(errorCode.getCode(), customMsg != null ? customMsg : errorCode.getDefaultMsg());
     }
 }
-
